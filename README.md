@@ -1,6 +1,6 @@
 # vrchat-ai-agent
 
-動画はチャンネルから  
+動画はチャンネルから (動作中の映像が見れます。) 
 https://www.youtube.com/channel/UCXj9c0VsTbFLUMKkNMEHiDg
 
 # VRChat AI Agent 技術紹介
