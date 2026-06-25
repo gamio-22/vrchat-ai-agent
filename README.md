@@ -5,14 +5,14 @@ https://www.youtube.com/channel/UCXj9c0VsTbFLUMKkNMEHiDg
 
 # VRChat AI Agent 技術紹介
 
-> このページでは、ソースコード、キャラクタープロンプト、個人用記憶データは公開していません。  
-> 動作動画とあわせて、使用技術・できること・設計方針を紹介するための説明文です。
+> このREADMEは、動作動画とあわせて、使用技術・できること・設計方針を整理するための説明文です。  
+> この作業フォルダには実行用コード、ローカル設定、モデル、ログ、記憶DB、キャラクタープロンプトが混在しています。公開する場合は、後述の公開前チェックリストに従って個人データと秘密情報を除外してください。
 
 ## 概要
 
 VRChat上で動作する、音声会話・視覚認識・長期記憶・感情/欲求モデル・自律行動・OSCによる身体制御を組み合わせたAIエージェントです。
 
-ユーザーの声を聞き、周囲をカメラで認識し、通常会話はローカルLLMで返答を生成し、VOICEVOX系TTSとVRChat Chatboxで応答します。視界説明やWeb検索など一部の処理ではGroq API、Gemini API、Wikimedia APIも併用し、必要に応じてローカル処理へフォールバックします。さらにVRChat OSCとキーボード入力を使って、アバターの移動、視線、表情、エモート、Use/Grab、ピアノ演奏などを制御します。
+ユーザーの声を聞き、周囲をカメラで認識し、通常会話はローカルLLMで返答を生成し、VOICEVOX系TTSとVRChat Chatboxで応答します。視界説明やWeb検索など一部の処理ではGroq API、Gemini API、Wikimedia APIも併用し、必要に応じてローカル処理へフォールバックします。ライブ会話用の任意ルートとしてOpenAI APIも導入していますが、通常は環境変数で明示的に有効化した場合だけ使います。さらにVRChat OSCとキーボード入力を使って、アバターの移動、視線、表情、エモート、Use/Grab、ピアノ演奏などを制御します。
 
 単純なチャットボットではなく、会話相手、視界内の人物や物体、なでられた状態、現在の感情、退屈さ、疲れ、孤独、好奇心、反発、過去の記憶、相手との関係性などを内部状態として持ちます。状況に応じて、話す、見る、歩く、止まる、探す、反応する、待つ、遊ぶ、ピアノを弾くといった行動を選びます。
 
@@ -21,12 +21,15 @@ VRChat上で動作する、音声会話・視覚認識・長期記憶・感情/�
 - Python
 - VRChat OSC / python-osc
 - OpenAI互換API経由のローカルLLM/Ollama系モデル
+- OpenAI API（Responses API / Chat Completions互換）の任意ライブ会話ルート
+- `toorai_core`による状況文脈、発話方針、軽量思考、保守キュー、モデルルーターの分離
 - Faster Whisperによる音声認識
+- Groq Whisperによる任意の高速文字起こしルート（失敗時はローカルWhisperへフォールバック）
 - VOICEVOX系TTSによる音声出力
 - SpeechBrain ECAPAによる話者識別
 - OpenCVによるカメラ処理
-- Ultralytics YOLO / YOLOv8 Poseによる人物・姿勢・物体検出
-- カスタムYOLOモデルによるVRChat内オブジェクト検出
+- Ultralytics YOLO / YOLO26 Pose（`yolo26n-pose.pt`）による人物・姿勢検出
+- 学習済みカスタムYOLOモデル（`best.pt`）によるVRChat内オブジェクト検出
 - Depth Anything V2 Smallによる単眼深度推定
 - Groq API VLMによる画像観察/ROI判定
 - Qwen2.5-VL系VLMによる画像観察/鏡判定のローカルフォールバック
@@ -36,7 +39,9 @@ VRChat上で動作する、音声会話・視覚認識・長期記憶・感情/�
 - Gemini Vision Searchによる画像付き検索
 - Wikimedia APIによる百科事典系情報の取得
 - Groq API VLMによる視界質問のフォールバック
+- Anthropic/Claude用providerの実験的実装（デフォルトのライブ会話ルートには未投入）
 - ChromaDB + Sentence Transformersによる長期記憶/検索
+- 軽い会話では長期記憶検索を省き、必要時は選別済み記憶候補から優先検索
 - Working Memoryによる短期会話文脈管理
 - Voicemeeter / 仮想オーディオデバイス連携
 - PyDirectInputによるVRChatウィンドウへのキー操作
@@ -50,6 +55,7 @@ VRChat上で動作する、音声会話・視覚認識・長期記憶・感情/�
 
 - マイク/仮想オーディオ入力からユーザーの声を取得
 - Faster Whisper large-v3系で日本語音声を文字起こし
+- `RAI_GROQ_WHISPER_ENABLED` が有効で `GROQ_API_KEY` がある場合はGroq Whisperを優先し、空応答や失敗時はローカルWhisperへ戻る
 - 短すぎる/長すぎる音声、プロンプト幻聴っぽい文字起こしをフィルタリング
 - リアルタイムVADで「ユーザーがまだ話している途中」を判定
 - ユーザーの発話中は返答を待ち、割り込み/停止指示も処理
@@ -66,6 +72,7 @@ VRChat上で動作する、音声会話・視覚認識・長期記憶・感情/�
 - 知らない人の発話は内容に応じて即返答/保留を判断
 - strangerは短期的に複数人まで追跡し、一定時間で失効
 - 発話者に応じて距離感、警戒、返答の優先度を変える
+- 起動時に、聞こえるすべての声を `master` として扱うテストモードを選択可能
 
 ### 3. VRChatアバターを操作する
 
@@ -109,12 +116,15 @@ VRChatアバター側の `FireSwitch` / `FireTrigger` OSCパラメータを使�
 
 一方で、悲しみ、恐怖、罪悪感が強い時は、演出が不自然にならないよう感情連動の炎を抑制します。ピアノ演奏中やピアノ操作ロック中も、演奏の邪魔をしないよう感情連動・自律発火の炎を止めます。
 
+追加演出として、「怪獣になって」「怪獣モード起動」などの発話で、一定時間だけ移動、視線、ジャンプ、炎を組み合わせるランページ動作も持っています。ピアノ演奏中は発動しません。
+
 主な実装箇所:
 
 - `main.py`
   - 炎コマンドの検出
   - 感情タグ・身体表情・自律行動からの炎発火判定
   - クールダウン、ターン間隔、ネガティブ感情ガード
+  - 怪獣モードの検出とランページ動作
 - `osc_unit.py`
   - `FireSwitch` / `FireTrigger` のOSC送信
   - タイマーによる自動OFF
@@ -141,7 +151,7 @@ VRChatアバター側の `FireSwitch` / `FireTrigger` OSCパラメータを使�
 ### 6. 視覚で周囲を認識する
 
 - カメラ入力からVRChat画面/周囲を取得
-- YOLOv8 Poseで人物検出
+- YOLO26 Pose（`yolo26n-pose.pt`）で人物検出
 - 複数人物の検出
 - 人物の位置、面積、画面内中心を推定
 - ユーザーとの距離感をざっくり推定
@@ -160,7 +170,7 @@ VRChatアバター側の `FireSwitch` / `FireTrigger` OSCパラメータを使�
 
 ### 7. カスタムYOLOで特定オブジェクトを検出する
 
-- カスタムYOLOモデルでVRChat内の特定オブジェクトを検出
+- 学習済みカスタムYOLOモデル（`best.pt`）でVRChat内の特定オブジェクトを検出
 - 現在の有効対象
   - `door_knob`
   - `poteto_chips`
@@ -170,6 +180,7 @@ VRChatアバター側の `FireSwitch` / `FireTrigger` OSCパラメータを使�
 - 同じ物体に反応しすぎないように制限
 - 人物追従と物体注視が干渉しないよう、人物ターゲットと物体ターゲットを分離
 - 検出結果は`vrc_approach_request`として既存の接近/インタラクト処理へ渡す
+- 現状は人物・姿勢検出に`yolo26n-pose.pt`、カスタム物体検出に`best.pt`を使用
 - 実際の接近、視線調整、Use/GrabはOSC操作シーケンス側で実行
 
 ### 8. 深度推定で歩行を補助する
@@ -265,6 +276,8 @@ Gemini 2.5 Flash-Liteは通常会話では任意の補助センサーとして�
 - AI自身についての自己記憶も保存
 - ChromaDBでベクトル検索
 - Sentence Transformers `intfloat/multilingual-e5-small` で多言語埋め込み
+- 通常会話では選別済みの記憶候補JSONを優先し、必要に応じてChromaDB検索へ戻せる
+- 「おはよう」「何してる？」のような軽い会話では長期記憶検索を省略できる
 - 類似記憶、矛盾した記憶、補足情報を判定
 - 記憶に信頼度と重要度を持たせる
 - confidence x decay x similarityで想起スコアを計算
@@ -277,7 +290,7 @@ Gemini 2.5 Flash-Liteは通常会話では任意の補助センサーとして�
 
 - master / stranger など相手によって印象を変える
 - 会話、なでなで、無視、接近、命令などのイベントで関係性が変化
-trust、familiarity、attachment、cautionのような中期状態を保持
+- trust、familiarity、attachment、cautionのような中期状態を保持
 - 相手への親しさ、警戒、距離感を返答や行動に反映
 - 相手ごとの印象を長期記憶にも保存
 
@@ -308,7 +321,7 @@ trust、familiarity、attachment、cautionのような中期状態を保持
 ### 17. 鏡・自分の姿に反応する
 
 - ミラー前にいる可能性がある時、探索行動として鏡や自分の姿を探す
-- YOLOでアバターらしき人物を見つけて接近
+- YOLO26 Poseでアバターらしき人物を見つけて接近
 - Qwen2.5-VL系VLMで「自分/鏡像らしいか」を判定
 - 自分だと判断した時と違う相手だと判断した時で表情や反応を変える
 - 鏡行動中は他の移動行動を抑制
@@ -365,6 +378,8 @@ trust、familiarity、attachment、cautionのような中期状態を保持
 - LLM応答をストリーミングしながら、Chatbox/TTS/OSCアクションへ振り分け
 - 自律発話では視覚情報を確認し、誰もいない状態で誰かに呼びかけるような誤反応を抑制
 - 強い拒絶や好意を受けた時も固定文を返すのではなく、短いトーン注釈と内部状態からローカルLLMが返答を生成
+- `turn_id`で古いターンの追加発話や視覚追撃が混ざりにくいように制御
+- `is_thinking`を表示用に寄せ、会話生成、保守処理、記憶処理の状態を分けて扱う
 
 ### 21. Web検索・Wiki検索・視界検索を使い分ける
 
@@ -385,6 +400,141 @@ trust、familiarity、attachment、cautionのような中期状態を保持
 - 検索結果やWikipedia本文をそのまま読まず、内容を噛み砕いた1〜2文の会話として返す
 - 検索ターンはメインのローカルLLMを通さず、感情評価もスキップして遅延を抑える
 
+### 22. コア設計とモデルルーター
+
+- `toorai_core`は既存の脳処理を置き換えるものではなく、`main.py`に集まっていた判断材料を束ねる薄い中核として使う
+- `SituationContext`で、気分、欲求、関係性、視覚、深度、人物検出などをまとめる
+- 視覚や人物検出には`source`、`age_sec`、`confidence`、`stale`を持たせ、古い情報を「今見えている」と扱いにくくする
+- `SpeechPlan`で、発話モード、トーン、意図、最大文量、TTS優先度、Chatbox可否、身体反応、口調演出をまとめる
+- `Thought`は発話直前の一時的な作業メモとして扱い、標準では長期記憶に保存しない
+- `MaintenanceQueue`で、会話要約や遅延記憶処理を暇な時に1件ずつ実行する
+- `ModelRouter`で、必要な場合だけOpenAI、Groq、Gemini、ローカルLLMのどれを使うかを選ぶ
+- ライブ会話のクラウドルートは`RAI_MODEL_ROUTER_ENABLED`と`RAI_LIVE_CLOUD_ENABLED`を有効にした時だけ使う
+- OpenAI APIはデフォルトでResponses APIを使い、設定でChat Completions互換にも切り替えられる
+- API呼び出しには期限、ターン確認、フォールバック、プロバイダーのクールダウンを持たせる
+- クラウドAPIが使えない、遅い、レート制限に当たった場合は、最終的にローカルLLMへ戻る
+- Anthropic/Claude用providerも実装しているが、現状はデフォルトのライブ会話プロバイダー順には入れていない実験的ルート
+
+## 主要ファイル
+
+| ファイル | 役割 |
+| --- | --- |
+| `main.py` | メインループ、会話、状態統合、検索分岐、自律発話、身体制御連携 |
+| `shared.py` | スレッド間で共有する状態ストア |
+| `rai_env.py` | `rai.env` / `.env` の読み込み |
+| `ears_improved.py` | 音声入力、VAD、Whisper/Groq Whisper、話者識別 |
+| `speaker_identifier.py` | SpeechBrainによる話者埋め込み照合 |
+| `speaker_emotion.py` | 発話者別の短期感情状態 |
+| `voice.py` | VOICEVOX系TTS、音声再生、発話状態管理 |
+| `osc_unit.py` | VRChat OSC送受信、移動、表情、Use/Grab、炎、ピアノ |
+| `vision_improved.py` | OpenCV、YOLO Pose、カスタムYOLO、Depth Anything |
+| `vb.py` | 明示視覚質問とROI観察の軽量VLMヘルパー |
+| `intent_detector.py` | 音声指示、視覚依頼、移動/操作意図の検出 |
+| `response_policy.py` | 発話可否、距離感、返答優先度の方針 |
+| `search_api.py` | Web/Wiki/視界検索ルーターと回答生成 |
+| `groq_api.py` | Groq Whisper/Vision/Text APIラッパー |
+| `memory_system.py` | 長期記憶、ChromaDB、矛盾処理、記憶検索 |
+| `working_memory.py` | 直近会話、保留文脈、rolling summary |
+| `mental.py` / `drives.py` | 感情・欲求状態 |
+| `emotion_drift.py` / `emotion_eval.py` | 感情の自然減衰とGemini補助評価 |
+| `appraisal.py` / `fast_appraisal.py` | 入力評価、感情変化 |
+| `relationship.py` | 関係性状態 |
+| `rule_engine.py` | ユーザー定義ルールの検出、保存、発火 |
+| `autonomy_social.py` / `gaze_humanizer.py` | 自律会話の社会的反応と自然な視線制御 |
+| `navigation.py` | 深度ナビ、物体反応、姿勢反応 |
+| `object_reactor.py` | カスタムYOLO/ROI反応の接着層 |
+| `mirror_behavior.py` | 鏡探索・自己確認 |
+| `idle_behavior.py` | 待機、自律移動、探索 |
+| `piano_player.py` | ピアノ意図検出、MIDI解析、即興生成 |
+| `vrc_piano_tool.py` | MIDIイベントをアバター用OSC鍵盤イベントへ変換 |
+| `piano_score.py` / `piano_feedback.py` / `piano_correction.py` | 譜面生成、演奏評価、補正 |
+| `piano_observer.py` / `piano_midi_observer.py` | OSC echoと外部MIDI入力の演奏観測 |
+| `toorai_core/` | 状況文脈、発話方針、モデルルーター、APIガード |
+| `tools/memory_review.py` | 記憶レビュー用の分類・書き出しツール |
+
+## 必要な外部環境
+
+- Windows
+- VRChat
+- VRChat OSC有効化
+- 対応アバター側OSCパラメータ
+- Voicemeeterまたは仮想オーディオデバイス
+- VOICEVOX互換TTSサーバー（既定: `http://127.0.0.1:10101`）
+- OllamaまたはOpenAI互換ローカルLLMサーバー（既定: `http://localhost:11434/v1`）
+- OpenCVで取得できるカメラ/画面キャプチャ入力
+- 必要に応じてCUDA対応GPU
+
+ローカルOllama側で使うモデル例:
+
+- `raiv27`
+- `raiv`
+- `qwen2.5vl:3b`
+- `gemma3:4b`
+- `gemma3:12b`
+
+## Python依存関係
+
+基本依存は `requirements.txt` にあります。このファイルは現在の実行環境からの固定版一覧なので、Python、OS、CUDA、pipの参照先によって一部の厳密なバージョン指定は調整が必要になる場合があります。
+
+```powershell
+pip install -r requirements.txt
+```
+
+現在のコードで使うが、環境によっては別途必要な任意依存:
+
+```powershell
+pip install google-genai google-generativeai
+pip install mido python-rtmidi
+```
+
+- `google-genai` / `google-generativeai`: Gemini感情評価、検索判定、Gemini Grounding、Gemini Vision Search、ルール判定
+- `mido` / `python-rtmidi`: 外部MIDI入力によるピアノ実音側検証
+
+## 設定ファイル
+
+`rai_env.py` は起動時に `rai.env` と `.env` を読み込みます。実環境の環境変数が優先されますが、`GEMINI_API_KEY` はファイル側で上書きされます。
+
+主な設定（一部）:
+
+- `GROQ_API_KEY`
+- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `RAI_WHISPER_MODEL`
+- `RAI_WHISPER_DEVICE`
+- `RAI_GROQ_WHISPER_ENABLED`
+- `RAI_GROQ_VISION_ENABLED`
+- `RAI_CAMERA_INDEX`
+- `RAI_CAMERA_CAPTURE_WIDTH`
+- `RAI_CAMERA_CAPTURE_HEIGHT`
+- `RAI_MEMORY_DB_PATH`
+- `RAI_MEMORY_SEARCH_MODE`
+- `RAI_MODEL_ROUTER_ENABLED`
+- `RAI_LIVE_CLOUD_ENABLED`
+- `RAI_LIVE_PROVIDER_ORDER`
+- `RAI_PRIVACY_LEVEL`
+- `RAI_PIANO_APPLY_CORRECTION`
+- `RAI_PIANO_AUTO_UPDATE_CORRECTION`
+- `RAI_PIANO_WRITE_LEARNED_SCORE`
+- `RAI_PIANO_MIDI_INPUT_ENABLED`
+
+APIキーを含む設定ファイルは絶対に公開しないでください。
+
+## 起動
+
+1. VRChatを起動し、OSCを有効化する。
+2. VOICEVOX互換TTSサーバーを起動する。
+3. Ollama/ローカルLLMを起動し、必要なモデルを用意する。
+4. Voicemeeter/仮想オーディオの入力・出力デバイスを合わせる。
+5. 必要に応じて `rai.env` を設定する。
+6. 実行する。
+
+```powershell
+python main.py
+```
+
+起動直後に「聞こえるすべての声をmaster扱いするか」を聞かれます。動作確認だけなら `y`、通常の話者識別を使うなら `n` を選びます。
+
 ## 動画で見せやすい内容
 
 1. VRChat内で待機している状態から起動する
@@ -397,30 +547,35 @@ trust、familiarity、attachment、cautionのような中期状態を保持
 8. ドアノブを見つけて向き、Useする
 9. ポテトチップスなどの対象にGrab/Useする
 10. 自律的に見回したり歩いたりする
-11. ピアノを表示し、MIDIから生成したアバター向け譜面や即興フレーズをOSCで演奏する
-12. 同じ曲を複数回演奏し、ログ評価と補正によるタイミング変化を確認する
-13. 記憶した内容を後の会話に反映する
-14. 複数人/知らない人がいる時に反応が変わる
-15. 「VRChatって何？」のような百科事典系の質問をWiki経由で返す
-16. 「WikipediaでVRChatを調べて」のような明示的なWiki指定に反応する
-17. 「最新モデル調べて」のような最新情報系の質問をGemini検索で返す
-18. 「これ何？」「この魚何？」のような視界検索を画像付きで返す
-19. 「検索してもわからなかった」のような報告文では検索を発火しない
-20. 「今何が見える？」でVLMが視界を説明する
+11. 怒りや驚きに応じて炎ギミックを出す
+12. 「怪獣になって」で移動、視線、ジャンプ、炎を組み合わせる
+13. ピアノを表示し、MIDIから生成したアバター向け譜面や即興フレーズをOSCで演奏する
+14. 同じ曲を複数回演奏し、ログ評価と補正によるタイミング変化を確認する
+15. 記憶した内容を後の会話に反映する
+16. 複数人/知らない人がいる時に反応が変わる
+17. 「VRChatって何？」のような百科事典系の質問をWiki経由で返す
+18. 「WikipediaでVRChatを調べて」のような明示的なWiki指定に反応する
+19. 「最新モデル調べて」のような最新情報系の質問をGemini検索で返す
+20. 「これ何？」「この魚何？」のような視界検索を画像付きで返す
+21. 「検索してもわからなかった」のような報告文では検索を発火しない
+22. 「今何が見える？」でVLMが視界を説明する
 
 ## アピールポイント
 
 - VRChat内で「会話だけ」ではなく、身体を持ったAIとして振る舞う
 - 音声、視覚、記憶、感情、欲求、身体行動を同時に扱う
 - ローカルLLM中心で動作するため、キャラクター性や応答制御を細かく調整できる
+- OpenAI APIなどのクラウドLLMは、必要な時だけ使う任意の補助ルートとして扱える
 - OSCを使ってVRChatの移動、表情、エモート、Chatbox、アバターパラメータを統合
 - 深度推定を使って、ただ前進するだけではなく障害物を見ながら移動する
+- 炎ギミックや怪獣モードのような、会話の感情や発話トリガーに結びついた身体演出を持つ
 - 話者識別により、マスターと他ユーザーを分けて扱える
 - 長期記憶、短期文脈、関係性により、継続的な付き合いができる
 - 自律行動により、放置中もその場に存在しているように振る舞う
 - MIDIやアバター向け譜面をVRChatアバター用OSCイベントへ変換し、アバター内ピアノを演奏できる
 - 演奏ログとVRChat OSC反応を比較し、タイミング補正や譜面調整のための記録を残せる
-- カスタムYOLOとVLMを組み合わせ、VRChatワールド固有の物体にも反応できる
+- カスタムYOLO（`best.pt`）とVLMを組み合わせ、VRChatワールド固有の物体にも反応できる
+- 状況文脈、発話方針、軽量思考、保守処理、モデル選択を分け、後から拡張しやすくしている
 - ローカルルーターを先に使い、曖昧な場合だけGeminiまたはGroqで検索意図と検索ルートを判定する
 - 明示的なWiki指定、百科事典向き質問、最新情報、視界質問を別ルートで処理する
 - 検索ターンではメインLLMを通さず、短い返答を直接生成して遅延を抑える
@@ -431,7 +586,7 @@ trust、familiarity、attachment、cautionのような中期状態を保持
 - 現時点では研究/個人開発プロトタイプ
 - VRChat、OSC設定、アバター側パラメータ、仮想オーディオ環境に依存
 - カメラ/画面認識の精度はワールド、ライティング、アバター形状、画角に影響される
-- YOLO/VLM/深度推定は誤検出することがあるため、実行前にクールダウンや信頼度で抑制している
+- YOLO26/VLM/深度推定は誤検出することがあるため、実行前にクールダウンや信頼度で抑制している
 - 深度推定は単眼推定のため、実距離ではなく相対的な障害物判定として使用
 - 自律移動は安全性のため速度や行動頻度を抑制
 - 話者識別はノイズ、マイク環境、声の重なりに影響される
@@ -440,7 +595,8 @@ trust、familiarity、attachment、cautionのような中期状態を保持
 - 外部MIDI入力は検証用に対応しているが、VRChat標準機能として実音がMIDI出力されるわけではない
 - extra_note_rateはVRChat OSC echoの重複反応を含む可能性があるため、補正や譜面更新では慎重に扱う
 - Geminiによる感情評価は任意機能で、APIキーやネットワーク状態に依存する。無効化または失敗時もローカルLLM中心の会話は継続する
-- Groq API、Gemini API、Wikimedia APIを使う機能は、APIキー、ネットワーク状態、レート制限、各サービスの応答品質に依存する
+- OpenAI API、Groq API、Gemini API、Wikimedia APIを使う機能は、APIキー、ネットワーク状態、レート制限、各サービスの応答品質に依存する
+- クラウドLLMのモデル名はAPI側で利用可能な名前に合わせて設定する必要がある
 - Gemini Grounding Searchは検索結果の選択に依存するため、最新情報や一点回答では誤ることがある
 - 天気、価格、APIモデル一覧など高精度な一点回答は、必要に応じて専用API化が必要
 - Wikimedia APIは百科事典的な固定情報には向くが、最新ニュースや現在の仕様確認には向かない
@@ -448,4 +604,14 @@ trust、familiarity、attachment、cautionのような中期状態を保持
 - 属性付きの続き質問は前回対象と属性を組み合わせるため、参照先を誤ると不適切な検索語を作る可能性がある
 - 「これ」「この画像」「目の前」などは前回検索対象より視覚質問を優先する
 - 感情と行動は確率的な傾向として扱うため、同じ入力でも内部状態や文脈によって反応が変わる
-- ソースコード、キャラクタープロンプト、個人用記憶データは非公開
+- この作業フォルダにはソースコード、キャラクタープロンプト、個人用記憶データ、ログ、ローカル設定が含まれるため、そのまま公開しない
+
+## 公開前チェックリスト
+
+- `rai.env`、`.env`、設定ファイル、コメント内に残ったAPIキーやトークンを削除する
+- `character.txt`、`rei.txt`、`history.json`、`relationship_state.json`、記憶DB、作業ログ、会話ログを公開対象から外す
+- `logs/`、`memory_review_workspace/`、`toorai_brain/`、モデルファイル、録音/録画/キャプチャなどの生成物を公開対象から外す
+- 公開用にはサンプル設定ファイルだけを置き、実際のAPIキー、ユーザー名、デバイス名、ローカルパスを書かない
+- 学習済みモデルや外部モデルを同梱する場合は、再配布ライセンスとファイルサイズを確認する
+- `.gitignore`に秘密情報、記憶データ、ログ、モデル、キャッシュ、仮想環境、`__pycache__/`を追加してからコミットする
+- READMEの説明が公開版の構成と一致しているかを最後に確認する
