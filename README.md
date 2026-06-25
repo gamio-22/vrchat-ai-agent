@@ -5,8 +5,7 @@ https://www.youtube.com/channel/UCXj9c0VsTbFLUMKkNMEHiDg
 
 # VRChat AI Agent 技術紹介
 
-> このREADMEは、動作動画とあわせて、使用技術・できること・設計方針を整理するための説明文です。  
-> この作業フォルダには実行用コード、ローカル設定、モデル、ログ、記憶DB、キャラクタープロンプトが混在しています。公開する場合は、後述の公開前チェックリストに従って個人データと秘密情報を除外してください。
+> このREADMEは、動作動画とあわせて、使用技術・できること・設計方針を整理するための未公開説明メモです。
 
 ## 概要
 
@@ -452,89 +451,6 @@ Gemini 2.5 Flash-Liteは通常会話では任意の補助センサーとして�
 | `toorai_core/` | 状況文脈、発話方針、モデルルーター、APIガード |
 | `tools/memory_review.py` | 記憶レビュー用の分類・書き出しツール |
 
-## 必要な外部環境
-
-- Windows
-- VRChat
-- VRChat OSC有効化
-- 対応アバター側OSCパラメータ
-- Voicemeeterまたは仮想オーディオデバイス
-- VOICEVOX互換TTSサーバー（既定: `http://127.0.0.1:10101`）
-- OllamaまたはOpenAI互換ローカルLLMサーバー（既定: `http://localhost:11434/v1`）
-- OpenCVで取得できるカメラ/画面キャプチャ入力
-- 必要に応じてCUDA対応GPU
-
-ローカルOllama側で使うモデル例:
-
-- `raiv27`
-- `raiv`
-- `qwen2.5vl:3b`
-- `gemma3:4b`
-- `gemma3:12b`
-
-## Python依存関係
-
-基本依存は `requirements.txt` にあります。このファイルは現在の実行環境からの固定版一覧なので、Python、OS、CUDA、pipの参照先によって一部の厳密なバージョン指定は調整が必要になる場合があります。
-
-```powershell
-pip install -r requirements.txt
-```
-
-現在のコードで使うが、環境によっては別途必要な任意依存:
-
-```powershell
-pip install google-genai google-generativeai
-pip install mido python-rtmidi
-```
-
-- `google-genai` / `google-generativeai`: Gemini感情評価、検索判定、Gemini Grounding、Gemini Vision Search、ルール判定
-- `mido` / `python-rtmidi`: 外部MIDI入力によるピアノ実音側検証
-
-## 設定ファイル
-
-`rai_env.py` は起動時に `rai.env` と `.env` を読み込みます。実環境の環境変数が優先されますが、`GEMINI_API_KEY` はファイル側で上書きされます。
-
-主な設定（一部）:
-
-- `GROQ_API_KEY`
-- `GEMINI_API_KEY`
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `RAI_WHISPER_MODEL`
-- `RAI_WHISPER_DEVICE`
-- `RAI_GROQ_WHISPER_ENABLED`
-- `RAI_GROQ_VISION_ENABLED`
-- `RAI_CAMERA_INDEX`
-- `RAI_CAMERA_CAPTURE_WIDTH`
-- `RAI_CAMERA_CAPTURE_HEIGHT`
-- `RAI_MEMORY_DB_PATH`
-- `RAI_MEMORY_SEARCH_MODE`
-- `RAI_MODEL_ROUTER_ENABLED`
-- `RAI_LIVE_CLOUD_ENABLED`
-- `RAI_LIVE_PROVIDER_ORDER`
-- `RAI_PRIVACY_LEVEL`
-- `RAI_PIANO_APPLY_CORRECTION`
-- `RAI_PIANO_AUTO_UPDATE_CORRECTION`
-- `RAI_PIANO_WRITE_LEARNED_SCORE`
-- `RAI_PIANO_MIDI_INPUT_ENABLED`
-
-APIキーを含む設定ファイルは絶対に公開しないでください。
-
-## 起動
-
-1. VRChatを起動し、OSCを有効化する。
-2. VOICEVOX互換TTSサーバーを起動する。
-3. Ollama/ローカルLLMを起動し、必要なモデルを用意する。
-4. Voicemeeter/仮想オーディオの入力・出力デバイスを合わせる。
-5. 必要に応じて `rai.env` を設定する。
-6. 実行する。
-
-```powershell
-python main.py
-```
-
-起動直後に「聞こえるすべての声をmaster扱いするか」を聞かれます。動作確認だけなら `y`、通常の話者識別を使うなら `n` を選びます。
-
 ## 動画で見せやすい内容
 
 1. VRChat内で待機している状態から起動する
@@ -604,14 +520,3 @@ python main.py
 - 属性付きの続き質問は前回対象と属性を組み合わせるため、参照先を誤ると不適切な検索語を作る可能性がある
 - 「これ」「この画像」「目の前」などは前回検索対象より視覚質問を優先する
 - 感情と行動は確率的な傾向として扱うため、同じ入力でも内部状態や文脈によって反応が変わる
-- この作業フォルダにはソースコード、キャラクタープロンプト、個人用記憶データ、ログ、ローカル設定が含まれるため、そのまま公開しない
-
-## 公開前チェックリスト
-
-- `rai.env`、`.env`、設定ファイル、コメント内に残ったAPIキーやトークンを削除する
-- `character.txt`、`rei.txt`、`history.json`、`relationship_state.json`、記憶DB、作業ログ、会話ログを公開対象から外す
-- `logs/`、`memory_review_workspace/`、`toorai_brain/`、モデルファイル、録音/録画/キャプチャなどの生成物を公開対象から外す
-- 公開用にはサンプル設定ファイルだけを置き、実際のAPIキー、ユーザー名、デバイス名、ローカルパスを書かない
-- 学習済みモデルや外部モデルを同梱する場合は、再配布ライセンスとファイルサイズを確認する
-- `.gitignore`に秘密情報、記憶データ、ログ、モデル、キャッシュ、仮想環境、`__pycache__/`を追加してからコミットする
-- READMEの説明が公開版の構成と一致しているかを最後に確認する
